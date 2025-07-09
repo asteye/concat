@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import subprocess
+from pathlib import Path
+
+def list_git_files(recursive: bool, extensions: list[str]) -> tuple[list[str], Path]:
+    root = Path(
+        subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            stdout=subprocess.PIPE,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    )
+
+    result = subprocess.run(["git", "ls-files"], cwd=root, stdout=subprocess.PIPE, text=True, check=True)
+    files = result.stdout.strip().split('\n')
+
+    filtered_files = []
+    for f in files:
+        if not (root / f).exists():
+            continue
+        if not recursive and '/' in f:
+            continue
+        if extensions and not any(f.endswith(ext) for ext in extensions):
+            continue
+        filtered_files.append(f)  # keep relative path
+    return filtered_files, root
+
+def concat_files(files: list[str], root: Path) -> None:
+    total_lines = 0
+    included_files = []
+    for rel_path in files:
+        full_path = root / rel_path
+        print(f"\n### {rel_path} ###\n")
+        with full_path.open() as fp:
+            contents = fp.read()
+            print(contents)
+            total_lines += contents.count('\n') + (1 if contents and not contents.endswith('\n') else 0)
+            included_files.append(rel_path)
+
+    print(f"\n--- Total lines: {total_lines} ---")
+    print(f"--- Included files ({len(included_files)}): ---")
+    for f in included_files:
+        print(f)
+
+def main():
+    parser = argparse.ArgumentParser(description="Concatenate contents of git-tracked files")
+    parser.add_argument("-r", "--recursive", action="store_true", help="Include subdirectories")
+    parser.add_argument("--ext", nargs='*', default=[], help="Filter by file extensions (e.g. .py .txt)")
+    args = parser.parse_args()
+
+    files, root = list_git_files(args.recursive, args.ext)
+    concat_files(files, root)
+
+if __name__ == "__main__":
+    main()
+
