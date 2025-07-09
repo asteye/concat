@@ -15,18 +15,23 @@ def list_git_files(recursive: bool, extensions: list[str]) -> tuple[list[str], P
         ).stdout.strip()
     )
 
+    cwd_relative = Path.cwd().resolve().relative_to(root.resolve())
+
     result = subprocess.run(["git", "ls-files"], cwd=root, stdout=subprocess.PIPE, text=True, check=True)
     files = result.stdout.strip().split('\n')
 
     filtered_files = []
     for f in files:
-        if not (root / f).exists():
+        rel_path = Path(f)
+        if not (root / rel_path).exists():
             continue
-        if not recursive and '/' in f:
+        if not rel_path.is_relative_to(cwd_relative):
+            continue
+        if not recursive and rel_path.parent != cwd_relative:
             continue
         if extensions and not any(f.endswith(ext) for ext in extensions):
             continue
-        filtered_files.append(f)  # keep relative path
+        filtered_files.append(f)
     return filtered_files, root
 
 def concat_files(files: list[str], root: Path) -> None:
